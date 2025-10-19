@@ -1,17 +1,15 @@
-# Kotlin Quick Reference (v2.x, Android Focus)
+# Kotlin Quick Reference (v2.x, Core Focus)
 
-A concise, practical Kotlin reference guide for Android development. Kotlin v2.0.0-Beta1, Last Updated: Oct 19, 2025
+A concise, practical Kotlin reference guide focusing on core language features. Kotlin v2.0.0-Beta1, Last Updated: Oct 19, 2025
 
 ## Table of Contents
 - [Core Syntax](#core-syntax)
 - [Classes & Objects](#classes--objects)
 - [Functions & FP Patterns](#functions--fp-patterns)
-- [Coroutines](#coroutines)
-- [Flow Essentials](#flow-essentials)
-- [Stdlib Power Moves](#stdlib-power-moves)
+- [Collections & Sequences](#collections--sequences)
+- [Stdlib Features](#stdlib-features)
 - [Common Patterns](#common-patterns)
-- [Android + Compose](#android--compose)
-- [Interoperability & Build](#interoperability--build)
+- [Interoperability](#interoperability)
 - [Pitfalls & Gotchas](#pitfalls--gotchas)
 - [Cheat Tables](#cheat-tables)
 - [Snippet Index](#snippet-index)
@@ -54,13 +52,19 @@ val safe = nullable?.let { it.length }  // Safe call with let
 val list = listOf(1, null, 2).filterNotNull() // Remove nulls
 ```
 
-### Collections
+### Collections & Sequences
 ```kotlin
 val list = listOf(1, 2, 3)             // Immutable list
 val mutable = mutableListOf(1, 2, 3)    // Mutable list
 val mapped = list.map { it * 2 }        // Transform
 val filtered = list.filter { it > 1 }   // Filter
 val grouped = list.groupBy { it % 2 }   // Group by condition
+
+// Sequences for lazy evaluation
+val sequence = generateSequence(1) { it + 1 }
+    .take(5)
+    .filter { it % 2 == 0 }
+    .toList() // [2, 4]
 ```
 
 ## Classes & Objects
@@ -111,6 +115,27 @@ class Button : View(), Clickable {
 }
 ```
 
+### Delegation
+```kotlin
+interface Base {
+    fun print()
+}
+
+class BaseImpl : Base {
+    override fun print() = println("BaseImpl")
+}
+
+class Derived(b: Base) : Base by b  // Delegation
+
+// Property delegation
+class Example {
+    val lazy by lazy { computeExpensive() }
+    var observed by Delegates.observable("") { _, old, new ->
+        println("$old -> $new")
+    }
+}
+```
+
 ## Functions & FP Patterns
 
 ### Higher-Order Functions
@@ -127,55 +152,43 @@ val numbers = listOf(1, 2, 3)
 numbers.fold(0, Int::plus)
 ```
 
-### Coroutines
-
+### Extension Functions
 ```kotlin
-fun main() = runBlocking {
-    launch {  // Launch new coroutine
-        delay(1000L)
-        println("World!")
-    }
-    println("Hello")
-}
+fun String.truncate(maxLength: Int): String =
+    if (length <= maxLength) this
+    else "${take(maxLength - 3)}..."
 
-suspend fun fetchUser() = coroutineScope {
-    val user = async { api.getUser() }
-    val profile = async { api.getProfile() }
-    UserProfile(user.await(), profile.await())
-}
+fun <T> List<T>.secondOrNull(): T? =
+    if (size >= 2) this[1] else null
 ```
 
-## Flow Essentials
+## Stdlib Features
 
+### Result Handling
 ```kotlin
-val flow = flow {
-    for (i in 1..3) {
-        delay(100)
-        emit(i)
-    }
-}.map { it * 2 }
- .catch { e -> emit(-1) }
-
-// StateFlow
-val _state = MutableStateFlow(0)
-val state: StateFlow<Int> = _state.asStateFlow()
-```
-
-## Stdlib Power Moves
-
-```kotlin
-// Result handling
-runCatching { 
-    throw Exception("Oops") 
-}.onSuccess { 
-    println("Success") 
-}.onFailure { 
-    println("Failed: ${it.message}") 
+fun divide(a: Int, b: Int): Result<Int> = runCatching {
+    if (b == 0) throw ArithmeticException("Division by zero")
+    a / b
 }
 
-// Resource handling
-file.bufferedReader().use { reader ->
-    println(reader.readText())
+// Usage
+divide(10, 2)
+    .onSuccess { println(it) }
+    .onFailure { println("Error: ${it.message}") }
+```
+
+### Scope Functions
+```kotlin
+data class Person(var name: String, var age: Int)
+
+Person("Alice", 20).apply {
+    age = 21              // this.age = 21
+    name = "Alice Smith"  // this.name = "Alice Smith"
+}
+
+"test".let {
+    println(it.uppercase())
+    it.length
 }
 ```
 
@@ -185,43 +198,32 @@ file.bufferedReader().use { reader ->
 ```kotlin
 data class State(
     val items: List<String> = emptyList(),
-    val loading: Boolean = false
+    val selected: String? = null
 )
 
 fun updateState(state: State): State =
     state.copy(items = state.items + "new item")
 ```
 
-### Grid Utilities
+### Type-Safe Builders
 ```kotlin
-data class Point(val x: Int, val y: Int)
+class HTMLBuilder {
+    fun table(init: TableBuilder.() -> Unit): Table =
+        TableBuilder().apply(init).build()
+}
 
-fun Point.neighbors(): List<Point> =
-    listOf(
-        Point(x - 1, y), Point(x + 1, y),
-        Point(x, y - 1), Point(x, y + 1)
-    )
-```
-
-## Android + Compose
-
-```kotlin
-@Composable
-fun Counter() {
-    var count by remember { mutableStateOf(0) }
+class TableBuilder {
+    private val cells = mutableListOf<String>()
     
-    Button(onClick = { count++ }) {
-        Text("Count: $count")
+    fun cell(value: String) {
+        cells.add(value)
     }
-}
-
-// LaunchedEffect example
-LaunchedEffect(key1 = true) {
-    // Run once when component enters composition
+    
+    fun build(): Table = Table(cells)
 }
 ```
 
-## Interoperability & Build
+## Interoperability
 
 ### Java Interop
 ```kotlin
@@ -232,21 +234,13 @@ fun createUser(name: String, age: Int = 0) = User(name, age)
 fun String.toSlug() = lowercase().replace(" ", "-")
 ```
 
-### Gradle Setup
-```groovy
-dependencies {
-    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3"
-    implementation "org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.0"
-}
-```
-
 ## Pitfalls & Gotchas
 
 - Never use `!!` operator unless absolutely necessary
 - `equals()` vs `===`: Value comparison vs Reference comparison
-- Avoid blocking calls on Main thread
-- Always cancel coroutines in `onDestroy()`
 - Be careful with mutable collections passed as parameters
+- Remember that nullable types are not covariant
+- Watch out for platform types from Java (possible runtime nulls)
 
 ## Cheat Tables
 
@@ -271,11 +265,11 @@ dependencies {
 
 1. [Null Safety Example](#null-safety)
 2. [Data Class Usage](#data-classes)
-3. [Coroutine Basics](#coroutines)
-4. [Flow Implementation](#flow-essentials)
+3. [Extension Functions](#functions)
+4. [Collection Operations](#collections--sequences)
 5. [State Management](#common-patterns)
-6. [Compose Counter](#android--compose)
-7. [Error Handling](#stdlib-power-moves)
-8. [Extension Functions](#functions)
-9. [Collection Operations](#collections)
-10. [Scope Functions Usage](#cheat-tables)
+6. [Error Handling](#stdlib-features)
+7. [Scope Functions Usage](#scope-functions)
+8. [Type-Safe Builders](#common-patterns)
+9. [Property Delegation](#delegation)
+10. [Java Interoperability](#interoperability)
